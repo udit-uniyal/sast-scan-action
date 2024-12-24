@@ -1,0 +1,78 @@
+name: AccuKnox SAST 
+description: Run SAST analysis and upload reports to AccuKnox Panel. 
+inputs:
+  sonar_token:
+    description: "Token for authenticating with SonarQube."
+    required: true
+  sonar_host_url:
+    description: "The SonarQube host URL."
+    required: true
+  accuknox_endpoint:
+    description: "The URL of the CSPM panel to push the scan results to."
+    required: true
+  tenant_id:
+    description: "The ID of the tenant associated with the CSPm dashboard."
+    required: true
+  accuknox_token:
+    description: "The token for authenticating with AccuKnox SaaS."
+    required: true
+  label:
+    description: "Label created in AccuKnox SaaS for associating the scan results."
+    required: true
+  sonar_project_key:
+    description: "The project key in SonarQube."
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: SonarQube Scan
+      uses: sonarsource/sonarqube-scan-action@master
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar_token }}
+        SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+
+    - name: Run AccuKnox SAST job with Project Key
+      if: ${{ inputs.sonar_project_key }}
+      run: |
+        docker run --rm \
+          -e SQ_URL=${{ inputs.sonar_host_url }} \
+          -e SQ_AUTH_TOKEN=${{ inputs.sonar_token }} \
+          -e REPORT_PATH=/app/data/ \
+          -e SQ_PROJECTS="^${{ inputs.sonar_project_key }}$" \
+          -v $PWD:/app/data/ \
+          accuknox/sastjob:latest
+      shell: bash
+
+    - name: Run AccuKnox SAST job without Project Key
+      if: ${{ !inputs.sonar_project_key }}
+      run: |
+        docker run --rm \
+          -e SQ_URL=${{ inputs.sonar_host_url }} \
+          -e SQ_AUTH_TOKEN=${{ inputs.sonar_token }} \
+          -e REPORT_PATH=/app/data/ \
+          -v $PWD:/app/data/ \
+          accuknox/sastjob:latest
+      shell: bash
+
+    - name: Upload SAST reports
+      run: |
+        cd ${GITHUB_WORKSPACE}
+        for file in `ls -1 SQ-*.json`; do
+          curl --location --request POST "https://${{ inputs.accuknox_endpoint }}/api/v1/artifact/?tenant_id=${{ inputs.tenant_id }}&data_type=SQ&label_id=${{ inputs.label }}&save_to_s3=false" \
+            --header "Tenant-Id: ${{ inputs.tenant_id }}" \
+            --header "Authorization: Bearer ${{ inputs.accuknox_token }}" \
+            --form "file=@\"$file\""
+        done
+      shell: bash
+
+    - name: SonarQube Quality Gate check
+      id: sonarqube-quality-gate-check
+      uses: sonarsource/sonarqube-quality-gate-action@master
+      env:
+        SONAR_TOKEN: ${{ inputs.sonar_token }}
+        SONAR_HOST_URL: ${{ inputs.sonar_host_url }}
+        
+branding:
+  icon: "shield"
+  color: "purple"
