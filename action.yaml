@@ -59,7 +59,7 @@ runs:
       run: |
         cd ${GITHUB_WORKSPACE}
         for file in `ls -1 SQ-*.json`; do
-          curl --location --request POST "https://${{ inputs.accuknox_endpoint }}/api/v1/artifact/?tenant_id=${{ inputs.tenant_id }}&data_type=SQ&label_id=${{ inputs.label }}&save_to_s3=false" \
+          curl --location --request POST "https://${{ inputs.accuknox_endpoint }}/api/v1/artifact/?tenant_id=${{ inputs.tenant_id }}&data_type=SQ&label_id=${{ inputs.label }}&save_to_s3=true" \
             --header "Tenant-Id: ${{ inputs.tenant_id }}" \
             --header "Authorization: Bearer ${{ inputs.accuknox_token }}" \
             --form "file=@\"$file\""
